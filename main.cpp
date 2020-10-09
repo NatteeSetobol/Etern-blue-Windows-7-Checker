@@ -63,6 +63,28 @@ struct __attribute__((__packed__)) neg_prot_resp
 	us32 securityBlock[26];
 };
 
+struct __attribute__((__packed__)) Simple_Protected_Negotiation
+{
+	uchar sign[2];
+	uchar negTokenInit[6];
+	uchar mechTypes[2];
+	uchar mechType[10];
+	uchar unknown[4];
+	uchar ntlmssp[8];
+	uchar ntlmMsgType[4];
+	uchar negFlags[4];
+	uchar workStationDoman[8];
+	uchar workStationName[8];
+};
+
+struct __attribute__((__packed__)) GSS_API
+{
+	uchar sign[4];
+	uchar oID[6];
+	struct Simple_Protected_Negotiation simpleProtectNegotiation;
+};
+
+
 
 struct __attribute__((__packed__)) Setup_AndX_Request 
 {
@@ -78,22 +100,24 @@ struct __attribute__((__packed__)) Setup_AndX_Request
 	uint32 reserved2;
 	uint32 capabilities;
 	ushort byteCount;
-	s32 securityBlob[66];
+	struct  GSS_API gssAPI;
 	s32 OS[5];
 	s32 LANManger[6];
 };
 
-/*
-struct __attribute__((__packed__)) Simple_Protected_Negotiation
+
+
+struct __attribute__((__packed__)) Setup_AndX_Response
 {
+	uchar wordCount;
+	uchar andXCommand;
+	uchar reserved;
+	ushort andXOffset;
+	ushort action;
+	ushort securityBlobLen;
+	ushort byteCount;
 };
 
-struct __attribute__((__packed__)) GSS_API
-{
-	s32 sign[5];
-	s32 oid[6];
-};
-*/
 
 uint32 SwapBytes(uint32 bytesToSwap)
 {
@@ -279,7 +303,7 @@ int main()
 	
 	*/
 
-	//socket = CreateSocket("10.10.90.223", 445);
+	//socket = CreateSocket("10.10.152.36", 445);
 
 	//if (socket.connected)
 	{
@@ -290,7 +314,9 @@ int main()
 			 struct net_bios netBios = {};
 			 ui32 packetTotalSize = 0;
 			 void* packet=NULL;
-			
+			 void* recvPacket = NULL;
+			 ui32 recvPacketSize=0;
+			struct smb_header *recvSmbHeader = {};
 
 			 smbHeader.protocol[0] = 0xFF;
 			 smbHeader.protocol[1] = 'S';
@@ -305,7 +331,7 @@ int main()
 			 //smbHeader.securityFeature = 0;
 			 smbHeader.reserves = 0;
 			 smbHeader.tid = 0xFFFF;
-			 smbHeader.pid = 0x1e17;
+			 smbHeader.pid = BigToLittleEndian( (ushort) 0x1e17);
 			 smbHeader.uid = 0;
 			 smbHeader.mid = 0;
 
@@ -328,29 +354,107 @@ int main()
 					0x34,0xa0,0x0e,0x30,0x0c,0x06,0x0a,0x2b,0x06,0x01,0x04,0x01,0x82,0x37,0x02,0x02,
 					0x0a,0xa2,0x22,0x04,0x20,0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x01,0x00,0x00,
 					0x00,0x05,0x02,0x88,0xa0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-					0x00,0x00,0x00,0x00
+					0x00,0x00,0x00,0x00, 0x00
 					};
-			 memcpy(setupAndXRequest.securityBlob,blobStatic,66);
+
+			 setupAndXRequest.gssAPI.sign[0] = 0x60;
+			 setupAndXRequest.gssAPI.sign[1] = 0x40;
+			 setupAndXRequest.gssAPI.sign[2] = 0x06;
+			 setupAndXRequest.gssAPI.sign[3] = 0x06;
+
+			 setupAndXRequest.gssAPI.oID[0]  = 0x2b;
+			 setupAndXRequest.gssAPI.oID[1]  = 0x06;
+			 setupAndXRequest.gssAPI.oID[2]  = 0x01;
+			 setupAndXRequest.gssAPI.oID[3]  = 0x05;
+			 setupAndXRequest.gssAPI.oID[4]  = 0x05;
+			 setupAndXRequest.gssAPI.oID[5]  = 0x02;
+
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.sign[0] = 0xa0; 
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.sign[1] = 0x36;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[0] = 0x30;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[1] = 0x34;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[2] = 0xa0;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[3] = 0x0e;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[4] = 0x30;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[5] = 0x0c;
+
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechTypes[0] = 0x06;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechTypes[1] = 0x0a;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[0] = 0x2b;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[1] = 0x06;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[2] = 0x01;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[3] = 0x04;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[4] = 0x01;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[5] = 0x82;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[6] = 0x37;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[7] = 0x02;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[8] = 0x02;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[9] = 0x0a;
+
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[0] = 0xa2;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[1] = 0x22;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[2] = 0x04;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[3] = 0x20;
+
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[0] = 0x4e;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[1] = 0x54;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[2] = 0x4c;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[3] = 0x4d;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[4] = 0x53;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[5] = 0x53;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[6] = 0x50;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[7] = 0x00;
+
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[0] = 0x01;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[1] = 0x00;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[2] = 0x00;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[3] = 0x00;
+
+
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[0] = 0x05;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[1] = 0x02;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[2] = 0x88;
+			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[3] = 0xa0;
+
+
+
+	//		 memcpy(setupAndXRequest.securityBlob,blobStatic,66);
 			 memcpy(setupAndXRequest.OS,"Unix",5);
 			 memcpy(setupAndXRequest.LANManger,"Samba",6);
 			
 			 packetTotalSize = sizeof(struct smb_header) + sizeof(struct Setup_AndX_Request);
 			 netBios.length = BigToLittleEndian(packetTotalSize);
 
-			packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios));
+			packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios) + 1);
 
 			memcpy(packet,(void*) &netBios,sizeof(netBios));
 			memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
 			memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(setupAndXRequest));	
+	
+/*
+			SendToSocket(&socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
+		
+			recvPacket = SMB_RecievePacket(&socket,&recvPacketSize);
 
-
+			if (recvPacket)
+			{
+				recvSmbHeader = (smb_header*) recvPacket;
+				if (recvSmbHeader->smbError == 0xc0000016)
+				{
+					printf("works!\n");
+				} else {
+					printf("this doesn't work!\n");
+				}
+			}
+			
+			
+		*/
 			FILE *samplePacketFile = NULL;
 
 			samplePacketFile = fopen("sample_smb_setupXAndReq.raw","wb");;
 			fwrite(packet,1,packetTotalSize+sizeof(struct net_bios),samplePacketFile);
 			fclose(samplePacketFile);
-
 
 		 }
 	}
