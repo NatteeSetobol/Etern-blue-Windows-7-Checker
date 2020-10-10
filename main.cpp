@@ -12,6 +12,7 @@
 enum 
 {
 	SMB_STATUS_OK = 0,
+	STATUS_MORE_PROCESSING_REQUIRED = 0xC0000016,
 };
 
 struct __attribute__((__packed__))net_bios
@@ -291,6 +292,131 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket)
 	return nps_smbHeader->smbError;
 }
 
+ui32 SetupAndXRequestChallenge(struct platform_socket *socket)
+{
+	struct smb_header smbHeader = {};
+	struct Setup_AndX_Request setupAndXRequest = {};
+	struct net_bios netBios = {};
+	ui32 packetTotalSize = 0;
+	void* packet=NULL;
+	void* recvPacket = NULL;
+	ui32 recvPacketSize=0;
+	struct smb_header *recvSmbHeader = {};
+
+	smbHeader.protocol[0] = 0xFF;
+	smbHeader.protocol[1] = 'S';
+	smbHeader.protocol[2] = 'M';
+	smbHeader.protocol[3] = 'B';
+
+	smbHeader.command = 0x73;
+	smbHeader.smbError = 0;
+	smbHeader.flag = 0x18;
+	smbHeader.flag2 = 0x4801;
+	smbHeader.PIDHigh = 0;
+	//smbHeader.securityFeature = 0;
+	smbHeader.reserves = 0;
+	smbHeader.tid = 0xFFFF;
+	smbHeader.pid = BigToLittleEndian( (ushort) 0x1e17);
+	smbHeader.uid = 0;
+	smbHeader.mid = 0;
+
+	setupAndXRequest.wordCount = 0xC;
+	setupAndXRequest.andXCommand = 0xff;
+	setupAndXRequest.reserved = 0x00;
+	setupAndXRequest.andXOffset = 0x0000;
+	setupAndXRequest.maxBuffer = (ushort) 61440;
+	setupAndXRequest.maxMpxCount = (ushort)  2;
+	setupAndXRequest.vcNumber = (ushort) 1;
+	//setupAndXRequest.sessionKey = 0;
+	setupAndXRequest.securityBlobLen =  66;
+	setupAndXRequest.reserved = 0x00000000;
+	setupAndXRequest.capabilities = (ui32) 0x8000c044;
+	// NOTES(): Byte count is security blob Length + OS Length + LAN Manager Length
+	setupAndXRequest.byteCount = (ushort)  0x004d; //77  
+	setupAndXRequest.gssAPI.sign[0] = 0x60;
+	setupAndXRequest.gssAPI.sign[1] = 0x40;
+	setupAndXRequest.gssAPI.sign[2] = 0x06;
+	setupAndXRequest.gssAPI.sign[3] = 0x06;
+
+	setupAndXRequest.gssAPI.oID[0]  = 0x2b;
+	setupAndXRequest.gssAPI.oID[1]  = 0x06;
+	setupAndXRequest.gssAPI.oID[2]  = 0x01;
+	setupAndXRequest.gssAPI.oID[3]  = 0x05;
+	setupAndXRequest.gssAPI.oID[4]  = 0x05;
+	setupAndXRequest.gssAPI.oID[5]  = 0x02;
+
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.sign[0] = 0xa0; 
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.sign[1] = 0x36;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[0] = 0x30;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[1] = 0x34;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[2] = 0xa0;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[3] = 0x0e;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[4] = 0x30;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[5] = 0x0c;
+
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechTypes[0] = 0x06;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechTypes[1] = 0x0a;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[0] = 0x2b;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[1] = 0x06;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[2] = 0x01;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[3] = 0x04;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[4] = 0x01;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[5] = 0x82;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[6] = 0x37;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[7] = 0x02;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[8] = 0x02;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[9] = 0x0a;
+
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[0] = 0xa2;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[1] = 0x22;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[2] = 0x04;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[3] = 0x20;
+
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[0] = 0x4e;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[1] = 0x54;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[2] = 0x4c;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[3] = 0x4d;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[4] = 0x53;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[5] = 0x53;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[6] = 0x50;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[7] = 0x00;
+
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[0] = 0x01;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[1] = 0x00;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[2] = 0x00;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[3] = 0x00;
+
+
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[0] = 0x05;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[1] = 0x02;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[2] = 0x88;
+	setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[3] = 0xa0;
+
+	memcpy(setupAndXRequest.OS,"Unix",4);
+	memcpy(setupAndXRequest.LANManger,"Samba",5);
+
+	packetTotalSize = sizeof(struct smb_header) + sizeof(struct Setup_AndX_Request);
+	netBios.length = BigToLittleEndian(packetTotalSize);
+
+	packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios));
+
+	memcpy(packet,(void*) &netBios,sizeof(netBios));
+	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(setupAndXRequest));	
+
+
+	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
+
+	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
+
+	if (recvPacket)
+	{
+		recvSmbHeader = (smb_header*) ( sizeof(net_bios)+((i8*)recvPacket));
+	}
+
+	return recvSmbHeader->smbError;
+}
+
 int main()
 {
 	struct platform_socket socket;
@@ -307,164 +433,29 @@ int main()
 	
 	*/
 
-	printf("Connecting...\n");
-	socket = CreateSocket("10.10.120.51", 445);
+	printf("Connecting...");
+	socket = CreateSocket("10.10.227.97", 445);
 
 	if (socket.connected)
 	{
-		printf("Connected!\n");
-		printf("Sending Negotiate Request\n");
+		printf("Ok\n");
+		printf("Sending Negotiate Request..");
 		 if (SMB_NegotiateRequest(&socket) == SMB_STATUS_OK)
 		 {
 
-			 printf("Negotiate Request..ok!\n");
-			
-			 struct smb_header smbHeader = {};
-			 struct Setup_AndX_Request setupAndXRequest = {};
-			 struct net_bios netBios = {};
-			 ui32 packetTotalSize = 0;
-			 void* packet=NULL;
-			 void* recvPacket = NULL;
-			 ui32 recvPacketSize=0;
-			struct smb_header *recvSmbHeader = {};
-
-			 smbHeader.protocol[0] = 0xFF;
-			 smbHeader.protocol[1] = 'S';
-			 smbHeader.protocol[2] = 'M';
-			 smbHeader.protocol[3] = 'B';
-
-			 smbHeader.command = 0x73;
-			 smbHeader.smbError = 0;
-			 smbHeader.flag = 0x18;
-			 smbHeader.flag2 = 0x4801;
-			 smbHeader.PIDHigh = 0;
-			 //smbHeader.securityFeature = 0;
-			 smbHeader.reserves = 0;
-			 smbHeader.tid = 0xFFFF;
-			 smbHeader.pid = BigToLittleEndian( (ushort) 0x1e17);
-			 smbHeader.uid = 0;
-			 smbHeader.mid = 0;
-
-			 setupAndXRequest.wordCount = 0xC;
-			 setupAndXRequest.andXCommand = 0xff;
-			 setupAndXRequest.reserved = 0x00;
-			 setupAndXRequest.andXOffset = 0x0000;
-			 setupAndXRequest.maxBuffer = (ushort) 61440;
-			 setupAndXRequest.maxMpxCount = (ushort)  2;
-			 setupAndXRequest.vcNumber = (ushort) 1;
-			 //setupAndXRequest.sessionKey = 0;
-			 setupAndXRequest.securityBlobLen =  66;
-			 setupAndXRequest.reserved = 0x00000000;
-			 setupAndXRequest.capabilities = (ui32) 0x8000c044;
-			 // NOTES(): Byte count is security blob Length + OS Length + LAN Manager Length
-			 setupAndXRequest.byteCount = (ushort)  0x004d; //77  
-			 // NOTES(): This will be static for now!
-			 char  blobStatic[] = { 
-					0x60, 0x40,0x06,0x06,0x2b,0x06,0x01,0x05,0x05,0x02,0xa0,0x36,0x30,
-					0x34,0xa0,0x0e,0x30,0x0c,0x06,0x0a,0x2b,0x06,0x01,0x04,0x01,0x82,0x37,0x02,0x02,
-					0x0a,0xa2,0x22,0x04,0x20,0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x01,0x00,0x00,
-					0x00,0x05,0x02,0x88,0xa0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-					0x00,0x00,0x00,0x00, 0x00
-					};
-
-			 setupAndXRequest.gssAPI.sign[0] = 0x60;
-			 setupAndXRequest.gssAPI.sign[1] = 0x40;
-			 setupAndXRequest.gssAPI.sign[2] = 0x06;
-			 setupAndXRequest.gssAPI.sign[3] = 0x06;
-
-			 setupAndXRequest.gssAPI.oID[0]  = 0x2b;
-			 setupAndXRequest.gssAPI.oID[1]  = 0x06;
-			 setupAndXRequest.gssAPI.oID[2]  = 0x01;
-			 setupAndXRequest.gssAPI.oID[3]  = 0x05;
-			 setupAndXRequest.gssAPI.oID[4]  = 0x05;
-			 setupAndXRequest.gssAPI.oID[5]  = 0x02;
-
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.sign[0] = 0xa0; 
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.sign[1] = 0x36;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[0] = 0x30;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[1] = 0x34;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[2] = 0xa0;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[3] = 0x0e;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[4] = 0x30;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negTokenInit[5] = 0x0c;
-
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechTypes[0] = 0x06;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechTypes[1] = 0x0a;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[0] = 0x2b;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[1] = 0x06;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[2] = 0x01;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[3] = 0x04;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[4] = 0x01;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[5] = 0x82;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[6] = 0x37;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[7] = 0x02;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[8] = 0x02;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.mechType[9] = 0x0a;
-
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[0] = 0xa2;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[1] = 0x22;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[2] = 0x04;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.unknown[3] = 0x20;
-
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[0] = 0x4e;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[1] = 0x54;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[2] = 0x4c;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[3] = 0x4d;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[4] = 0x53;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[5] = 0x53;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[6] = 0x50;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmssp[7] = 0x00;
-
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[0] = 0x01;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[1] = 0x00;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[2] = 0x00;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.ntlmMsgType[3] = 0x00;
-
-
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[0] = 0x05;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[1] = 0x02;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[2] = 0x88;
-			 setupAndXRequest.gssAPI.simpleProtectNegotiation.negFlags[3] = 0xa0;
-
-
-
-	//		 memcpy(setupAndXRequest.securityBlob,blobStatic,66);
-			 memcpy(setupAndXRequest.OS,"Unix",4);
-			 memcpy(setupAndXRequest.LANManger,"Samba",5);
-			
-			 packetTotalSize = sizeof(struct smb_header) + sizeof(struct Setup_AndX_Request);
-			 netBios.length = BigToLittleEndian(packetTotalSize);
-
-			packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios));
-
-			memcpy(packet,(void*) &netBios,sizeof(netBios));
-			memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
-			memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(setupAndXRequest));	
-	
-
-			SendToSocket(&socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
-
-	
-			recvPacket = SMB_RecievePacket(&socket,&recvPacketSize);
-
-			if (recvPacket)
-			{
-				recvSmbHeader = (smb_header*) ( sizeof(net_bios)+((i8*)recvPacket));
-				if (recvSmbHeader->smbError == 0xc0000016)
-				{
-					printf("works!, %x\n",recvSmbHeader->smbError);
-				} else {
-					printf("this doesn't work!, %x\n",recvSmbHeader->smbError);
-				}
-			}
-			
-			
-		
+			 printf("ok!\n");
+			 printf("Sending SetUpAndXRequest..");
+			 if (SetupAndXRequestChallenge(&socket) == STATUS_MORE_PROCESSING_REQUIRED)
+			 {
+				printf("ok!\n");
+			 }
+			/*
 			FILE *samplePacketFile = NULL;
 
 			samplePacketFile = fopen("sample_smb_setupXAndReq.raw","wb");;
 			fwrite(packet,1,packetTotalSize+sizeof(struct net_bios),samplePacketFile);
 			fclose(samplePacketFile);
+			*/
 
 		 }
 	}
