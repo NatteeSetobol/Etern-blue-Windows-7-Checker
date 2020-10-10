@@ -79,7 +79,7 @@ int RecvFromSocket(struct platform_socket* platformSocket, char* dest, int len)
 {
 	int result = 0;
 
-	result = recv(platformSocket->socket,dest,len,0);
+	result = recv(platformSocket->socket,dest,len,MSG_DONTWAIT);
 
 	return result;
 }

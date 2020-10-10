@@ -207,10 +207,14 @@ void *SMB_RecievePacket(struct platform_socket* socket, ui32* packetSize)
 				totalBytesRecv += retCount;
 			}
 
+			if (totalBytesRecv >= totalPacketSize)
+			{
+				break;
+			}
 			rotationCount++;
 		}
 
-	} while (retCount > 0);
+	} while (retCount != 0);
 
 	*packetSize  =  totalBytesRecv;
 	return recvPacket;
@@ -303,12 +307,18 @@ int main()
 	
 	*/
 
-	//socket = CreateSocket("10.10.152.36", 445);
+	printf("Connecting...\n");
+	socket = CreateSocket("10.10.120.51", 445);
 
-	//if (socket.connected)
+	if (socket.connected)
 	{
-	//	 if (SMB_NegotiateRequest(&socket) == SMB_STATUS_OK)
+		printf("Connected!\n");
+		printf("Sending Negotiate Request\n");
+		 if (SMB_NegotiateRequest(&socket) == SMB_STATUS_OK)
 		 {
+
+			 printf("Negotiate Request..ok!\n");
+			
 			 struct smb_header smbHeader = {};
 			 struct Setup_AndX_Request setupAndXRequest = {};
 			 struct net_bios netBios = {};
@@ -419,37 +429,37 @@ int main()
 
 
 	//		 memcpy(setupAndXRequest.securityBlob,blobStatic,66);
-			 memcpy(setupAndXRequest.OS,"Unix",5);
-			 memcpy(setupAndXRequest.LANManger,"Samba",6);
+			 memcpy(setupAndXRequest.OS,"Unix",4);
+			 memcpy(setupAndXRequest.LANManger,"Samba",5);
 			
 			 packetTotalSize = sizeof(struct smb_header) + sizeof(struct Setup_AndX_Request);
 			 netBios.length = BigToLittleEndian(packetTotalSize);
 
-			packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios) + 1);
+			packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios));
 
 			memcpy(packet,(void*) &netBios,sizeof(netBios));
 			memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
 			memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(setupAndXRequest));	
 	
-/*
+
 			SendToSocket(&socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
-		
+	
 			recvPacket = SMB_RecievePacket(&socket,&recvPacketSize);
 
 			if (recvPacket)
 			{
-				recvSmbHeader = (smb_header*) recvPacket;
+				recvSmbHeader = (smb_header*) ( sizeof(net_bios)+((i8*)recvPacket));
 				if (recvSmbHeader->smbError == 0xc0000016)
 				{
-					printf("works!\n");
+					printf("works!, %x\n",recvSmbHeader->smbError);
 				} else {
-					printf("this doesn't work!\n");
+					printf("this doesn't work!, %x\n",recvSmbHeader->smbError);
 				}
 			}
 			
 			
-		*/
+		
 			FILE *samplePacketFile = NULL;
 
 			samplePacketFile = fopen("sample_smb_setupXAndReq.raw","wb");;
