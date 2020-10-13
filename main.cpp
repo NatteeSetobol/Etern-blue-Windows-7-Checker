@@ -266,7 +266,7 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket)
 	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = 0xFFFF;
-	smbHeader.pid =BigToLittleEndian( (ushort) 0x1e17);
+	smbHeader.pid =51445;//BigToLittleEndian( (ushort) 0x1337);
 	smbHeader.uid = 0;
 	smbHeader.mid = 0;
 
@@ -335,7 +335,7 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ui32 *userID)
 	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = 0xFFFF;
-	smbHeader.pid = BigToLittleEndian( (ushort) 0x1e17);
+	smbHeader.pid = 51445;//BigToLittleEndian( (ushort) 0x1337);
 	smbHeader.uid = 0;
 	smbHeader.mid = 0;
 
@@ -455,6 +455,7 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ui32 *userID)
 
 		*userID = recvSmbHeader->uid;
 		result = recvSmbHeader->smbError;
+
 	}
 
 	return result;
@@ -463,7 +464,6 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ui32 *userID)
 int main()
 {
 	struct platform_socket socket;
-	FILE* testPacket = NULL;
 	ui32 userID = 0;
 	/*
 	testPacket = fopen("test_packet.raw", "wb");
@@ -479,24 +479,33 @@ int main()
 
 
 	printf("Connecting...");
-	socket = CreateSocket("10.10.94.117", 445);
+	socket = CreateSocket("10.10.238.151", 445);
 
-	//if (socket.connected)
+	if (socket.connected)
 	{
 		
 		printf("Ok\n");
 		printf("Sending Negotiate Request..");
-	//	if (SMB_NegotiateRequest(&socket) == SMB_STATUS_OK)
+		if (SMB_NegotiateRequest(&socket) == SMB_STATUS_OK)
 		{
 
 			printf("ok!\n");
 			printf("Sending SetUpAndXRequest..");
-	//		if (SetupAndXRequestChallenge(&socket,&userID) == STATUS_MORE_PROCESSING_REQUIRED)
+			if (SetupAndXRequestChallenge(&socket,&userID) == STATUS_MORE_PROCESSING_REQUIRED)
 			{
+			
+				printf("ok!\n");
+
+				FILE* samplePacketFile= NULL;
 				struct smb_header smbHeader = {};
 				struct Setup_AndX_Request setupAndXRequest = {};
 				struct net_bios netBios = {};
+				struct SPN_negTokenTarg spnNegTokenTArg = {};
 				uint32 spnNegLen = 0;
+				char OS[5] = {};
+				char LANManager[6] = {};
+				uint packetTotalSize = 0;
+				void *packet = NULL;
 
 				spnNegLen = sizeof(SPN_negTokenTarg);
 
@@ -513,7 +522,7 @@ int main()
 				//smbHeader.securityFeature = 0;
 				smbHeader.reserves = 0;
 				smbHeader.tid = 0xFFFF;
-				smbHeader.pid = BigToLittleEndian( (ushort) 0x1e17);
+				smbHeader.pid = 51445;
 				smbHeader.uid = userID;
 				smbHeader.mid = 0;
 
@@ -531,11 +540,114 @@ int main()
 				// NOTES(): Byte count is security blob Length + OS Length + LAN Manager Length
 				setupAndXRequest.byteCount = spnNegLen+5+6; //77  
 
+				spnNegTokenTArg.sign[0] = 0xa1;
+				spnNegTokenTArg.sign[1] = 0x47;
+
+				spnNegTokenTArg.negTokSign[0] = 0x30;
+				spnNegTokenTArg.negTokSign[1] = 0x45;
+				spnNegTokenTArg.negTokSign[2] = 0xa2;
+				spnNegTokenTArg.negTokSign[3] = 0x43;
+				spnNegTokenTArg.negTokSign[4] = 0x04;
+				spnNegTokenTArg.negTokSign[5] = 0x41;
+			
+				strcpy((char*) spnNegTokenTArg.NTLMSSPID,"NTLMSSP");
+
+				spnNegTokenTArg.NTLMMessageType = 3;
+				spnNegTokenTArg.LANLen = 1;
+				spnNegTokenTArg.LANmaxLen = 1;
+				spnNegTokenTArg.LANOffset = 64;
+
+				spnNegTokenTArg.NTLMResp[0] = 0x00;
+				spnNegTokenTArg.NTLMResp[1] = 0x00;
+				spnNegTokenTArg.NTLMResp[2] = 0x00;
+				spnNegTokenTArg.NTLMResp[3] = 0x00;
+				spnNegTokenTArg.NTLMResp[4] = 0x41;
+				spnNegTokenTArg.NTLMResp[5] = 0x00;
+				spnNegTokenTArg.NTLMResp[6] = 0x00;
+				spnNegTokenTArg.NTLMResp[7] = 0x00;
+
+				spnNegTokenTArg.domainName[0] = 0x00;
+				spnNegTokenTArg.domainName[1] = 0x00;
+				spnNegTokenTArg.domainName[2] = 0x00;
+				spnNegTokenTArg.domainName[3] = 0x00;
+				spnNegTokenTArg.domainName[4] = 0x40;
+				spnNegTokenTArg.domainName[5] = 0x00;
+				spnNegTokenTArg.domainName[6] = 0x00;
+				spnNegTokenTArg.domainName[7] = 0x00;
 
 
-			} //else {
-	///			printf("error!\n");
-	//		}
+				spnNegTokenTArg.username[0] = 0x00;
+				spnNegTokenTArg.username[1] = 0x00;
+				spnNegTokenTArg.username[2] = 0x00;
+				spnNegTokenTArg.username[3] = 0x00;
+				spnNegTokenTArg.username[4] = 0x40;
+				spnNegTokenTArg.username[5] = 0x00;
+				spnNegTokenTArg.username[6] = 0x00;
+				spnNegTokenTArg.username[7] = 0x00;
+
+				spnNegTokenTArg.hostName[0] = 0x00;
+				spnNegTokenTArg.hostName[1] = 0x00;
+				spnNegTokenTArg.hostName[2] = 0x00;
+				spnNegTokenTArg.hostName[3] = 0x00;
+				spnNegTokenTArg.hostName[4] = 0x40;
+				spnNegTokenTArg.hostName[5] = 0x00;
+				spnNegTokenTArg.hostName[6] = 0x00;
+				spnNegTokenTArg.hostName[7] = 0x00;
+
+				spnNegTokenTArg.sessionKey[0] = 0x00;
+				spnNegTokenTArg.sessionKey[1] = 0x00;
+				spnNegTokenTArg.sessionKey[2] = 0x00;
+				spnNegTokenTArg.sessionKey[3] = 0x00;
+				spnNegTokenTArg.sessionKey[4] = 0x41;
+				spnNegTokenTArg.sessionKey[5] = 0x00;
+				spnNegTokenTArg.sessionKey[6] = 0x00;
+				spnNegTokenTArg.sessionKey[7] = 0x00;
+
+				spnNegTokenTArg.negFlags[0] = 0x05;
+				spnNegTokenTArg.negFlags[1] = 0x02;
+				spnNegTokenTArg.negFlags[2] = 0x88;
+				spnNegTokenTArg.negFlags[3] = 0xa0;
+
+				spnNegTokenTArg.LanManagerResp = 0x00;
+
+				memcpy(OS,"Unix",4);
+				memcpy(LANManager,"Samba",5);
+
+
+				packetTotalSize = sizeof(struct smb_header) + sizeof(struct Setup_AndX_Request) +  sizeof(spnNegTokenTArg) + 5 + 6;
+				netBios.length = BigToLittleEndian(packetTotalSize);
+				packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios) );
+				
+				memcpy(packet,(void*) &netBios,sizeof(netBios));
+				memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
+				memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(spnNegTokenTArg));	
+
+				memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest),(void*) &spnNegTokenTArg, sizeof(spnNegTokenTArg));
+				memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg),(void*) OS, 5);
+				memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg)+5,(void*) LANManager, 6);
+
+				printf("Sending NTLMSSP_AUTH, USER \\..");
+				SendToSocket(&socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
+
+				void *recvPacket=NULL;
+				ui32 recvPacketSize = 0;
+				recvPacket = SMB_RecievePacket(&socket,&recvPacketSize);
+
+				if (recvPacket)
+				{
+					printf("packet recv\n");
+				}
+
+
+				/*
+				samplePacketFile = fopen("sample_smb_setupXAndReq_auth_user.raw","wb");;
+				fwrite(packet,1,packetTotalSize+sizeof(struct net_bios),samplePacketFile);
+				fclose(samplePacketFile);
+				*/
+
+			} else {
+				printf("error!\n");
+			}
 
 			/*
 			   FILE *samplePacketFile = NULL;
