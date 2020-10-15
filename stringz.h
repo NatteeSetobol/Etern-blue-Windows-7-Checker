@@ -47,6 +47,7 @@ void Strcpy(unsigned char* dest, unsigned char* source);
 unsigned char* vCreateString(unsigned char* newString, char* filename, int line);
 int Strlen(unsigned char* string);
 s32 *Char2BinaryAscii(us32 c );
+s32* CS32Cat(i32 size, ...);
 
 #define S32(newstring)  vCreateString(newstring,(char*) __FILE__,__LINE__);
 #define S32M(newstring,file,line)  vCreateString(newstring,file,line);

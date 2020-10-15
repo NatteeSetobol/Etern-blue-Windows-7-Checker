@@ -87,6 +87,65 @@ unsigned char* vCreateString(unsigned char* newString, char* filename, int line)
 }
 
 
+s32* CS32Cat(i32 size, ...)
+{
+	s32* returnResult = NULL;
+	s32* result = NULL;
+	s32* temp = NULL;
+	int i = 0;
+	s32* stringArg = NULL;
+
+	va_list vl;
+	va_start(vl, size);
+
+	stringArg = va_arg(vl, s32*);
+
+	result = S32(stringArg);
+
+	for (i = 1; i < size; i++)
+	{
+
+		s32* stringArg = va_arg(vl, s32*);
+		temp = MemoryA(char, Strlen(result) + 1 + Strlen(stringArg) + 1);
+
+		Strcpy(temp, result);
+		Strcpy(temp + strlen(result), stringArg);
+
+		if (result)
+		{
+			FreeMemory((i8*)result);
+			result = NULL;
+		}
+
+		result = S32(temp);
+
+		if (temp)
+		{
+			Free(temp);
+			temp = NULL;
+		}
+	}
+
+	if (temp)
+	{
+		Free(temp);
+		temp = NULL;
+	}
+
+
+	va_end(vl);
+
+	returnResult = S32(result);
+
+	if (result)
+	{
+		Free(result);
+		result = NULL;
+	}
+
+	return returnResult;
+}
+
 s32* S32Cat(s32* source, i32 size, ...)
 {
 	s32* returnResult = NULL;
@@ -198,6 +257,10 @@ us32* S32Cat(us32* source, i32 size, ...)
 
 	return returnResult;
 }
+
+
+
+
 
 
 

@@ -148,6 +148,43 @@ struct __attribute__((__packed__)) Tree_Connect_AndX_Response
 	ushort byteCount;
 };
 
+
+struct __attribute__((__packed__)) Trans_Response
+{
+	uchar wordCount;
+	ushort totalParameterCount;
+	ushort totalDataCount;
+	ushort maxParameterCount;
+	ushort maxDataCount;
+	uchar maxSetupCount;
+	uchar reserved;
+	ushort flags;
+	i32 timeout;
+	ushort reserved2;
+	ushort parameterCount;
+	ushort parameterOffset;
+	ushort dataCount;
+	ushort dataOffset;
+	uchar setupCount;
+	uchar reserved3;
+	ushort byteCount;
+};
+
+struct __attribute__((__packed__)) Tree_Disconnect_Request
+{
+	uchar wordCount;
+	ushort byteCount;
+};
+
+struct __attribute__((__packed__)) Logoff_AndX_Request
+{
+	uchar wordCount;
+	uchar andXCommand;
+	uchar reserved;
+	ushort andXOffset;
+	ushort byteCount;
+};
+
 uint32 SwapBytes(uint32 bytesToSwap)
 {
 	ui32 result = 0;
@@ -604,7 +641,7 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID)
 
 	memcpy(packet,(void*) &netBios,sizeof(netBios));
 	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
-	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(spnNegTokenTArg));	
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &setupAndXRequest,sizeof(setupAndXRequest));	
 
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest),(void*) &spnNegTokenTArg, sizeof(spnNegTokenTArg));
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg),(void*) OS, 5);
@@ -626,10 +663,95 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID)
 	return result;
 }
 
+ui32 TreeConnectAndXRequest(struct platform_socket *socket, ui32 userID, char* targetIP)
+{
+	struct smb_header smbHeader = {};
+	struct net_bios netBios = {};
+	struct Tree_Connect_AndX_Response treeConnectAndXResp= {};
+	uint32 spnNegLen = 0;
+	s32 *path = NULL;
+	s32 *service = NULL;
+	s32 *password = NULL;
+	ui32 packetTotalSize = 0;
+	void *packet = NULL;
+	void *recvPacket=NULL;
+	ui32 recvPacketSize = 0;
+	struct net_bios *recv_netBios = NULL;
+	struct smb_header *recv_smbHeader = NULL;
+	ui32 result = 0;
+
+
+	smbHeader.protocol[0] = 0xFF;
+	smbHeader.protocol[1] = 'S';
+	smbHeader.protocol[2] = 'M';
+	smbHeader.protocol[3] = 'B';
+
+	smbHeader.command = 0x75;
+	smbHeader.smbError = 0;
+	smbHeader.flag = 0x18;
+	smbHeader.flag2 = 0x4801;
+	smbHeader.PIDHigh = 0;
+	//smbHeader.securityFeature = 0;
+	smbHeader.reserves = 0;
+	smbHeader.tid = 0xFFFF;
+	smbHeader.pid = 51445;
+	smbHeader.uid = userID;
+	smbHeader.mid = 0;
+
+	treeConnectAndXResp.wordCount = 4;
+	treeConnectAndXResp.andXCommand = 0xff;
+	treeConnectAndXResp.reserved = 0x00;
+	treeConnectAndXResp.andXOffset = 0;
+	treeConnectAndXResp.flags = 0x0000;
+	treeConnectAndXResp.passLen = 1;
+
+	password = S32("\0");
+	path = CS32Cat(4,"\\\\", targetIP, "\\","IPC$");
+	service = S32("?????");
+
+
+	treeConnectAndXResp.byteCount = Strlen(password) + 1 + Strlen(path) + 1 + Strlen(service) + 1; 
+
+	packetTotalSize = sizeof(smbHeader) + sizeof(treeConnectAndXResp) + Strlen(password)+1 + Strlen(path) + 1 + Strlen(service) + 1;
+	packet = MemoryRaw(packetTotalSize+sizeof(struct net_bios) );
+
+	netBios.length = BigToLittleEndian(packetTotalSize);
+
+	memcpy(packet,(void*) &netBios,sizeof(netBios));
+	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),(void*) &treeConnectAndXResp,sizeof(treeConnectAndXResp));
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(treeConnectAndXResp),password,Strlen(password)+1);
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(treeConnectAndXResp)+Strlen(password)+1,path,Strlen(path)+1);
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(treeConnectAndXResp)+Strlen(password)+1+Strlen(path)+1,service,Strlen(service)+1);
+
+
+	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
+
+	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
+
+	if (recvPacket)
+	{
+		recv_netBios = (struct net_bios*) packet;
+		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + packet);
+
+		result = recv_smbHeader->smbError;
+	}
+/*
+	if (result == SMB_STATUS_OK)
+	{
+		printf("ok\n");
+	}
+*/
+	return result;
+
+}
+
 int main()
 {
 	struct platform_socket socket;
 	ui32 userID = 0;
+	s32 *targetIP = NULL;
+
 	/*
 	testPacket = fopen("test_packet.raw", "wb");
 
@@ -641,8 +763,10 @@ int main()
 	
 	*/
 
+	targetIP = S32("10.10.182.201");
+
 	printf("Connecting...");
-	socket = CreateSocket("10.10.225.63", 445);
+	socket = CreateSocket(targetIP, 445);
 
 	if (socket.connected)
 	{
@@ -658,47 +782,62 @@ int main()
 			{
 			
 				printf("ok!\n");
-
 				printf("Sending SetUpAndXAUTHUSER..");
 				if (SetupAndXRequestAUTHUSER(&socket, userID) == SMB_STATUS_OK)
 				{
 					
 					printf("ok!\n");
 					printf("Sending Tree Connect AndX Request..");
-					struct smb_header smbHeader = {};
-					struct net_bios netBios = {};
-					struct Tree_Connect_AndX_Response treeConnectAndXResp= {};
-					uint32 spnNegLen = 0;
 
-					smbHeader.protocol[0] = 0xFF;
-					smbHeader.protocol[1] = 'S';
-					smbHeader.protocol[2] = 'M';
-					smbHeader.protocol[3] = 'B';
+					if (TreeConnectAndXRequest(&socket, userID, targetIP) == SMB_STATUS_OK)
+					{
+						struct smb_header smbHeader = {};
+						struct net_bios netBios = {};
+						struct Trans_Response transResp = {};
 
-					smbHeader.command = 0x75;
-					smbHeader.smbError = 0;
-					smbHeader.flag = 0x18;
-					smbHeader.flag2 = 0x4801;
-					smbHeader.PIDHigh = 0;
-					//smbHeader.securityFeature = 0;
-					smbHeader.reserves = 0;
-					smbHeader.tid = 0xFFFF;
-					smbHeader.pid = 51445;
-					smbHeader.uid = userID;
-					smbHeader.mid = 0;
-					
-					treeConnectAndXResp.wordCount = 4;
-					treeConnectAndXResp.andXCommand = 0xff;
-					treeConnectAndXResp.reserved = 0x00;
-					treeConnectAndXResp.andXOffset = 0;
-					treeConnectAndXResp.flags = 0x0000;
-					treeConnectAndXResp.passLen = 1;
-					treeConnectAndXResp.byteCount = 0; // NOTES(): Calculate later
+						printf("ok!\n");
+
+						smbHeader.protocol[0] = 0xFF;
+						smbHeader.protocol[1] = 'S';
+						smbHeader.protocol[2] = 'M';
+						smbHeader.protocol[3] = 'B';
+
+						smbHeader.command = 0x25;
+						smbHeader.smbError = 0;
+						smbHeader.flag = 0x18;
+						smbHeader.flag2 = 0x4801;
+						smbHeader.PIDHigh = 0;
+						//smbHeader.securityFeature = 0;
+						smbHeader.reserves = 0;
+						smbHeader.tid = 0xFFFF;
+						smbHeader.pid = 51445;
+						smbHeader.uid = userID;
+						smbHeader.mid = 0;
+
+						transResp.wordCount = 0x0f;
+						transResp.totalParameterCount = 0x00;
+						transResp.totalDataCount  = 0x00;
+						transResp.maxParameterCount = 0xffff;
+						transResp.maxDataCount = 2048;
+						transResp.maxSetupCount = 0x02;
+						transResp.reserved = 0x00;
+						transResp.flags = 0x00;
+						transResp.timeout = 0xffffffff;
+						transResp.reserved2 = 0x0000;
+						transResp.parameterCount = 0x0;
+						transResp.parameterOffset = 0x0;
+						transResp.dataCount = 0;
+						transResp.dataOffset = 0;
+						transResp.setupCount = 1;
+						transResp.reserved3 = 0;
+						transResp.byteCount = 0;
 
 
-				} else {
-					printf("error\n");
-				}
+					}
+
+				} //else {
+			//		printf("error\n");
+			//	}
 
 				/*
 				samplePacketFile = fopen("sample_smb_setupXAndReq_auth_user.raw","wb");;
@@ -706,9 +845,9 @@ int main()
 				fclose(samplePacketFile);
 				*/
 
-			} else {
-				printf("error!\n");
-			}
+			} //else {
+		//		printf("error!\n");
+		//	}
 
 			/*
 			   FILE *samplePacketFile = NULL;
