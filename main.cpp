@@ -1,5 +1,4 @@
 /*
-
 License: MIT License
 
 Copyright (c) 2020 Nomications
@@ -145,11 +144,6 @@ struct __attribute__((__packed__)) Setup_AndX_Request
 	uint32 reserved2;
 	uint32 capabilities;
 	ushort byteCount;
-	/*
-	struct  GSS_API gssAPI;
-	s32 OS[5];
-	s32 LANManger[6];
-	*/
 };
 
 
@@ -348,7 +342,7 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = 0xFFFF;
-	smbHeader.pid = *randomPid;//BigToLittleEndian( (ushort) 0x1337);
+	smbHeader.pid = *randomPid;
 	smbHeader.uid = 0;
 	smbHeader.mid = 0;
 
@@ -372,20 +366,10 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 
 	if (smbPacket)
 	{
-		//printf("packet recv, size is %i\n", packetSize);
-
 		nps_netBios = (struct net_bios*) smbPacket;
 		nps_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + smbPacket);
 		nps_prot_resp = (struct neg_prot_resp*) (sizeof(struct net_bios) + sizeof(smb_header) + smbPacket);
-		/*
-		for (int securityBlockIndex = 0; securityBlockIndex < 16; securityBlockIndex++)
-		{
-			printf("%x", nps_prot_resp->securityBlock[securityBlockIndex]);
-		}
-		
 
-		printf("\n");
-		*/
 		result =nps_smbHeader->smbError;
 	}
 
@@ -415,10 +399,9 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 	smbHeader.flag = 0x18;
 	smbHeader.flag2 = 0x4801;
 	smbHeader.PIDHigh = 0;
-	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = 0xFFFF;
-	smbHeader.pid = randomPID;//BigToLittleEndian( (ushort) 0x1337);
+	smbHeader.pid = randomPID;;
 	smbHeader.uid = 0;
 	smbHeader.mid = 0;
 
@@ -429,7 +412,6 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 	setupAndXRequest.maxBuffer = (ushort) 61440;
 	setupAndXRequest.maxMpxCount = (ushort)  2;
 	setupAndXRequest.vcNumber = (ushort) 1;
-	//setupAndXRequest.sessionKey = 0;
 	setupAndXRequest.securityBlobLen =  66;
 	setupAndXRequest.reserved = 0x00000000;
 	setupAndXRequest.capabilities = (ui32) 0x8000c044;
@@ -440,7 +422,6 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 	struct  GSS_API gssAPI ={};
 	char OS[5] = {};
 	char LANManager[6] = {};
-	//FILE* testPacket = NULL;
 
 	gssAPI.sign[0] = 0x60;
 	gssAPI.sign[1] = 0x40;
@@ -519,17 +500,6 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
-	/*
-	testPacket = fopen("test_packet.raw", "wb");
-
-	if (testPacket)
-	{
-		fwrite(packet,1, sizeof(netBios) + packetTotalSize + sizeof(gssAPI) +  5 + 6,testPacket);
-		fclose(testPacket);
-	}
-	*/
-
-
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
 
 	if (recvPacket)
@@ -574,7 +544,6 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID, ushor
 	smbHeader.flag = 0x18;
 	smbHeader.flag2 = 0x4801;
 	smbHeader.PIDHigh = 0;
-	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = 0xFFFF;
 	smbHeader.pid = randomPID;
@@ -588,7 +557,6 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID, ushor
 	setupAndXRequest.maxBuffer = (ushort) 61440;
 	setupAndXRequest.maxMpxCount = (ushort)  2;
 	setupAndXRequest.vcNumber = (ushort) 1;
-	//setupAndXRequest.sessionKey = 0;
 	setupAndXRequest.securityBlobLen =  spnNegLen;
 	setupAndXRequest.reserved = 0x00000000;
 	setupAndXRequest.capabilities = (ui32) 0x8000c044;
@@ -725,7 +693,6 @@ ui32 TreeConnectAndXRequest(struct platform_socket *socket, ui32 userID, char* t
 	smbHeader.flag = 0x18;
 	smbHeader.flag2 = 0x4801;
 	smbHeader.PIDHigh = 0;
-	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = 0xFFFF;
 	smbHeader.pid = randomPid;
@@ -807,7 +774,6 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 	smbHeader.flag = 0x18;
 	smbHeader.flag2 = 0x4801;
 	smbHeader.PIDHigh = 0;
-	//smbHeader.securityFeature = 0;
 	smbHeader.reserves = 0;
 	smbHeader.tid = treeID;
 	smbHeader.pid = randomPID;
