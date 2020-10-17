@@ -208,6 +208,16 @@ struct __attribute__((__packed__)) Logoff_AndX_Request
 	ushort byteCount;
 };
 
+struct __attribute__((__packed__)) Logoff_AndX_Response
+{
+	uchar wordCount;
+	uchar andXCommand;
+	uchar reserved;
+	ushort andXOffset;
+	ushort byteCount;
+};
+
+
 uint32 SwapBytes(uint32 bytesToSwap)
 {
 	ui32 result = 0;
@@ -754,15 +764,14 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 	struct net_bios *recv_netBios = NULL;
 	struct smb_header *recv_smbHeader = NULL;
 	ui32 recvPacketSize = 0;
-	void *recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
+	void *recvPacket = NULL;
 	ui32 result = 0;
 	ushort newMID = 0;
+
 
 	srand(time(NULL));
 
 	newMID = 6000 + rand() * (6900 - 6000)/RAND_MAX;
-
-	printf("ok!\n");
 
 	smbHeader.protocol[0] = 0xFF;
 	smbHeader.protocol[1] = 'S';
@@ -831,6 +840,120 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 
 }
 
+ui32 SendDisconnectRequest(struct platform_socket *socket, ushort treeID, ushort userID,ushort randomPID)
+{
+	ui32 result = 0;
+	struct smb_header smbHeader = {};
+	struct net_bios netBios = {};
+	struct Tree_Disconnect_Request treeDisconnectReq = {};
+	ui32 packetTotalSize = 0;
+	void* packet = NULL;
+	struct net_bios *recv_netBios = NULL;
+	struct smb_header *recv_smbHeader = NULL;
+	ui32 recvPacketSize = 0;
+	void *recvPacket = NULL;
+
+	smbHeader.protocol[0] = 0xFF;
+	smbHeader.protocol[1] = 'S';
+	smbHeader.protocol[2] = 'M';
+	smbHeader.protocol[3] = 'B';
+
+	smbHeader.command = 0x71;
+	smbHeader.smbError = 0;
+	smbHeader.flag = 0x18;
+	smbHeader.flag2 = 0x4801;
+	smbHeader.PIDHigh = 0;
+	smbHeader.reserves = 0;
+	smbHeader.tid = treeID;
+	smbHeader.pid = randomPID;
+	smbHeader.uid = userID;
+	smbHeader.mid = 0;
+
+	treeDisconnectReq.wordCount = 0;
+	treeDisconnectReq.byteCount = 0;
+
+	packetTotalSize = sizeof(smbHeader) + sizeof(treeDisconnectReq);
+	netBios.length = BigToLittleEndian(packetTotalSize);
+
+	packet = MemoryRaw(packetTotalSize+sizeof(netBios) );
+
+	memcpy(packet,(void*) &netBios,sizeof(netBios));
+	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&treeDisconnectReq,sizeof(treeDisconnectReq));
+
+	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
+
+	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
+
+	if (recvPacket)
+	{
+		recv_netBios = (struct net_bios*) packet;
+		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + recvPacket);
+
+		result = recv_smbHeader->smbError;
+	}
+
+	return result;
+
+}
+
+ui32 LogoffAndXRequest(struct platform_socket *socket, ushort treeID, ushort userID,ushort randomPID)
+{
+	ui32 result = 0;
+	struct smb_header smbHeader = {};
+	struct net_bios netBios = {};
+	struct Logoff_AndX_Request logoffAndXRequest = {};
+	ui32 packetTotalSize = 0;
+	void* packet = NULL;
+	struct net_bios *recv_netBios = NULL;
+	struct smb_header *recv_smbHeader = NULL;
+	ui32 recvPacketSize = 0;
+	void *recvPacket = NULL;
+
+	smbHeader.protocol[0] = 0xFF;
+	smbHeader.protocol[1] = 'S';
+	smbHeader.protocol[2] = 'M';
+	smbHeader.protocol[3] = 'B';
+
+	smbHeader.command = 0x74;
+	smbHeader.smbError = 0;
+	smbHeader.flag = 0x18;
+	smbHeader.flag2 = 0x4801;
+	smbHeader.PIDHigh = 0;
+	smbHeader.reserves = 0;
+	smbHeader.tid = treeID;
+	smbHeader.pid = randomPID;
+	smbHeader.uid = userID;
+	smbHeader.mid = 0;
+
+	logoffAndXRequest.wordCount = 0;
+	logoffAndXRequest.andXCommand = 0xff;
+	logoffAndXRequest.reserved = 0x00;
+	logoffAndXRequest.andXOffset = 0x0;
+	logoffAndXRequest.byteCount = 0;
+
+
+	packet = MemoryRaw(packetTotalSize+sizeof(netBios) );
+
+	memcpy(packet,(void*) &netBios,sizeof(netBios));
+	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
+	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&logoffAndXRequest,sizeof(logoffAndXRequest));
+
+	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
+
+	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
+
+	if (recvPacket)
+	{
+		recv_netBios = (struct net_bios*) packet;
+		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + recvPacket);
+
+		result = recv_smbHeader->smbError;
+	}
+
+	return result;
+}
+
 int main()
 {
 	struct platform_socket socket;
@@ -839,7 +962,7 @@ int main()
 	ushort treeID = 0;
 	ushort randomPID = 0;
 
-	targetIP = S32("10.10.198.26");
+	targetIP = S32("10.10.10.25");
 
 	printf("Connecting...");
 	socket = CreateSocket(targetIP, 445);
@@ -875,6 +998,13 @@ int main()
 						} else {
 							printf("This machine is NOT vulnerable!\n");
 						}
+						printf("Sending Tree Disconnect request...");
+
+						if (SendDisconnectRequest(&socket, treeID, userID,randomPID) == SMB_STATUS_OK)
+						{
+							printf("ok\n");
+						}
+
 					} else {
 						printf("This machine is NOT vulnerable!\n");
 					}
@@ -883,6 +1013,11 @@ int main()
 					printf("This machine is NOT vulnerable!\n");
 				}
 
+				printf("Sending logoffAndXRequest..");
+				if (LogoffAndXRequest(&socket, treeID, userID,randomPID) == SMB_STATUS_OK)
+				{
+					printf("ok!\n");
+				}
 			} else {
 				printf("This machine is NOT vulnerable!\n");
 			}
