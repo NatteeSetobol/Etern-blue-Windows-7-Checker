@@ -163,6 +163,7 @@ void FreeMemory(i8* chunk)
 
 		}
 		PlatformFree(mi);
+		mi=NULL;
 	}
 
 #else

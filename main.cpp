@@ -361,7 +361,7 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 	negRequest.bufferFormat = 0x02;
 	strcpy( (char*) negRequest.name,"NT LM 0.12");
 
-	totalLength = sizeof(smbHeader) + sizeof(negRequest) - 1;
+	totalLength = sizeof(smbHeader) + sizeof(negRequest) ;
 	netbios.length =(ui32) BigToLittleEndian((uint32)totalLength);
 
 	packet = MemoryRaw(sizeof(netbios)+totalLength);
@@ -372,6 +372,7 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 
 	SendToSocket(socket,(char*) packet,(sizeof(netbios) + totalLength));
 
+	#ifndef MEM_DEBUG
 	smbPacket = SMB_RecievePacket(socket,&packetSize);
 
 	if (smbPacket)
@@ -380,9 +381,12 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 		nps_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + smbPacket);
 		nps_prot_resp = (struct neg_prot_resp*) (sizeof(struct net_bios) + sizeof(smb_header) + smbPacket);
 
-		result =nps_smbHeader->smbError;
+		result = nps_smbHeader->smbError;
 	}
-
+	#else 
+	//Insert Fake Results
+	result = SMB_STATUS_OK;
+	#endif
 
 	return  result;
 }
@@ -508,6 +512,7 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(gssAPI),(void*) OS, 5);
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(gssAPI)+5,(void*) LANManager, 6);
 
+	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -520,6 +525,9 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 		result = recvSmbHeader->smbError;
 
 	}
+	#else
+	result = STATUS_MORE_PROCESSING_REQUIRED;
+	#endif
 
 	return result;
 }
@@ -659,6 +667,7 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID, ushor
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg),(void*) OS, 5);
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg)+5,(void*) LANManager, 6);
 
+	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -670,6 +679,9 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID, ushor
 
 		result = recv_smbHeader->smbError;
 	}
+	#else
+		result = SMB_STATUS_OK;
+	#endif
 
 
 	return result;
@@ -738,6 +750,7 @@ ui32 TreeConnectAndXRequest(struct platform_socket *socket, ui32 userID, char* t
 
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
+#ifndef MEM_DEBUG
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
 
 	if (recvPacket)
@@ -748,6 +761,9 @@ ui32 TreeConnectAndXRequest(struct platform_socket *socket, ui32 userID, char* t
 		result = recv_smbHeader->smbError;
 		*returnTreeID = recv_smbHeader->tid;
 	}
+#else
+		result = SMB_STATUS_OK;
+#endif
 
 	return result;
 
@@ -821,6 +837,7 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&transResp,sizeof(transResp));
 
 
+	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -835,6 +852,9 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 		result = recv_smbHeader->smbError;
 
 	}
+	#else
+		result = STATUS_INSUFF_SERVER_RESOURCES;
+	#endif
 
 	return result;
 
@@ -881,6 +901,7 @@ ui32 SendDisconnectRequest(struct platform_socket *socket, ushort treeID, ushort
 	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&treeDisconnectReq,sizeof(treeDisconnectReq));
 
+	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -891,7 +912,10 @@ ui32 SendDisconnectRequest(struct platform_socket *socket, ushort treeID, ushort
 		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + recvPacket);
 
 		result = recv_smbHeader->smbError;
-	}
+	} 
+	#else
+		result = SMB_STATUS_OK;
+	#endif
 
 	return result;
 
@@ -933,12 +957,14 @@ ui32 LogoffAndXRequest(struct platform_socket *socket, ushort treeID, ushort use
 	logoffAndXRequest.byteCount = 0;
 
 
+	packetTotalSize = sizeof(smbHeader) + sizeof(logoffAndXRequest);
 	packet = MemoryRaw(packetTotalSize+sizeof(netBios) );
 
 	memcpy(packet,(void*) &netBios,sizeof(netBios));
 	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&logoffAndXRequest,sizeof(logoffAndXRequest));
 
+	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -950,6 +976,9 @@ ui32 LogoffAndXRequest(struct platform_socket *socket, ushort treeID, ushort use
 
 		result = recv_smbHeader->smbError;
 	}
+	#else
+		result = SMB_STATUS_OK; 
+	#endif
 
 	return result;
 }
@@ -962,12 +991,14 @@ int main()
 	ushort treeID = 0;
 	ushort randomPID = 0;
 
-	targetIP = S32("10.10.10.25");
+	targetIP = S32("10.10.53.203");
 
 	printf("Connecting...");
+	#ifndef MEM_DEBUG
 	socket = CreateSocket(targetIP, 445);
 
 	if (socket.connected)
+	#endif
 	{
 		
 		printf("Ok\n");
@@ -998,6 +1029,7 @@ int main()
 						} else {
 							printf("This machine is NOT vulnerable!\n");
 						}
+
 						printf("Sending Tree Disconnect request...");
 
 						if (SendDisconnectRequest(&socket, treeID, userID,randomPID) == SMB_STATUS_OK)
@@ -1026,5 +1058,8 @@ int main()
 			 printf("This machine is NOT vulnerable!\n");
 		 }
 	}
+	#ifdef MEM_DEBUG
+		MemoryResults();
+	#endif
 }
 
