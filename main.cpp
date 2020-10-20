@@ -316,6 +316,7 @@ void *SMB_RecievePacket(struct platform_socket* socket, ui32* packetSize)
 	} while (retCount != 0);
 
 	*packetSize  =  totalBytesRecv;
+
 	return recvPacket;
 
 }
@@ -372,7 +373,6 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 
 	SendToSocket(socket,(char*) packet,(sizeof(netbios) + totalLength));
 
-	#ifndef MEM_DEBUG
 	smbPacket = SMB_RecievePacket(socket,&packetSize);
 
 	if (smbPacket)
@@ -382,11 +382,17 @@ ui32 SMB_NegotiateRequest(struct platform_socket *socket, ushort *randomPid)
 		nps_prot_resp = (struct neg_prot_resp*) (sizeof(struct net_bios) + sizeof(smb_header) + smbPacket);
 
 		result = nps_smbHeader->smbError;
+
+		Free(smbPacket);
+		smbPacket=NULL;
+
 	}
-	#else 
-	//Insert Fake Results
-	result = SMB_STATUS_OK;
-	#endif
+
+	if (packet)
+	{
+		Free(packet);
+		packet=NULL;
+	}
 
 	return  result;
 }
@@ -512,7 +518,6 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(gssAPI),(void*) OS, 5);
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(gssAPI)+5,(void*) LANManager, 6);
 
-	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -524,10 +529,16 @@ ui32 SetupAndXRequestChallenge(struct platform_socket *socket, ushort *userID, u
 		*userID = recvSmbHeader->uid;
 		result = recvSmbHeader->smbError;
 
+		Free(recvPacket);
+		recvPacket= NULL;
+
 	}
-	#else
-	result = STATUS_MORE_PROCESSING_REQUIRED;
-	#endif
+
+	if (packet)
+	{
+		Free(packet);
+		packet=NULL;
+	}
 
 	return result;
 }
@@ -667,7 +678,6 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID, ushor
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg),(void*) OS, 5);
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader)+sizeof(setupAndXRequest)+sizeof(spnNegTokenTArg)+5,(void*) LANManager, 6);
 
-	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -678,11 +688,17 @@ ui32 SetupAndXRequestAUTHUSER(struct platform_socket *socket, ui32 userID, ushor
 		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + packet);
 
 		result = recv_smbHeader->smbError;
-	}
-	#else
-		result = SMB_STATUS_OK;
-	#endif
 
+		Free(recvPacket);
+		recvPacket=NULL;
+	}
+
+
+	if (packet)
+	{
+		Free(packet);
+		packet=NULL;
+	}
 
 	return result;
 }
@@ -750,7 +766,6 @@ ui32 TreeConnectAndXRequest(struct platform_socket *socket, ui32 userID, char* t
 
 	SendToSocket(socket,(char*) packet,(sizeof(net_bios) + packetTotalSize));
 
-#ifndef MEM_DEBUG
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
 
 	if (recvPacket)
@@ -760,10 +775,34 @@ ui32 TreeConnectAndXRequest(struct platform_socket *socket, ui32 userID, char* t
 
 		result = recv_smbHeader->smbError;
 		*returnTreeID = recv_smbHeader->tid;
+
+		Free(recvPacket);
+		recvPacket=NULL;
 	}
-#else
-		result = SMB_STATUS_OK;
-#endif
+
+	if (packet)
+	{
+		Free(packet);
+		packet = NULL;
+	}
+
+	if (path)
+	{
+		Free(path);
+		path=NULL;
+	}
+
+	if (password)
+	{
+		Free(password);
+		password=NULL;
+	}
+
+	if (service)
+	{
+		Free(service);
+		service = NULL;
+	}
 
 	return result;
 
@@ -837,7 +876,6 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&transResp,sizeof(transResp));
 
 
-	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -847,14 +885,18 @@ ui32 TransRequest(struct platform_socket *socket, ui32 userID, ushort treeID, ui
 		recv_netBios = (struct net_bios*) packet;
 		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + recvPacket);
 
-		
-
 		result = recv_smbHeader->smbError;
 
+		Free(recvPacket);
+		recvPacket=NULL;
+
 	}
-	#else
-		result = STATUS_INSUFF_SERVER_RESOURCES;
-	#endif
+
+	if (packet)
+	{
+		Free(packet);
+		packet=NULL;
+	}
 
 	return result;
 
@@ -901,7 +943,6 @@ ui32 SendDisconnectRequest(struct platform_socket *socket, ushort treeID, ushort
 	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&treeDisconnectReq,sizeof(treeDisconnectReq));
 
-	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -912,10 +953,17 @@ ui32 SendDisconnectRequest(struct platform_socket *socket, ushort treeID, ushort
 		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + recvPacket);
 
 		result = recv_smbHeader->smbError;
+
+		Free(recvPacket);
+		recvPacket=NULL;
 	} 
-	#else
-		result = SMB_STATUS_OK;
-	#endif
+
+	if (packet)
+	{
+		Free(packet);
+		packet=NULL;
+	}
+
 
 	return result;
 
@@ -964,7 +1012,6 @@ ui32 LogoffAndXRequest(struct platform_socket *socket, ushort treeID, ushort use
 	memcpy(packet+sizeof(netBios),(void*) &smbHeader,sizeof(smbHeader));
 	memcpy(packet+sizeof(netBios)+sizeof(smbHeader),&logoffAndXRequest,sizeof(logoffAndXRequest));
 
-	#ifndef MEM_DEBUG
 	SendToSocket(socket,(char*) packet,(sizeof(netBios) + packetTotalSize));
 
 	recvPacket = SMB_RecievePacket(socket,&recvPacketSize);
@@ -975,10 +1022,16 @@ ui32 LogoffAndXRequest(struct platform_socket *socket, ushort treeID, ushort use
 		recv_smbHeader = (struct smb_header*) (sizeof(struct net_bios) + recvPacket);
 
 		result = recv_smbHeader->smbError;
+
+		Free(recvPacket);
+		recvPacket=NULL;
 	}
-	#else
-		result = SMB_STATUS_OK; 
-	#endif
+
+	if (packet)
+	{
+		Free(packet);
+		packet=NULL;
+	}
 
 	return result;
 }
@@ -991,14 +1044,13 @@ int main()
 	ushort treeID = 0;
 	ushort randomPID = 0;
 
-	targetIP = S32("10.10.53.203");
+	targetIP = S32("10.10.142.106");
 
-	printf("Connecting...");
-	#ifndef MEM_DEBUG
+	printf("Connecting to %s...", targetIP);
+
 	socket = CreateSocket(targetIP, 445);
 
 	if (socket.connected)
-	#endif
 	{
 		
 		printf("Ok\n");
@@ -1058,8 +1110,13 @@ int main()
 			 printf("This machine is NOT vulnerable!\n");
 		 }
 	}
-	#ifdef MEM_DEBUG
-		MemoryResults();
-	#endif
+
+	if (targetIP)
+	{
+		Free(targetIP);
+		targetIP= NULL;
+	}
+
+	MemoryResults();
 }
 
